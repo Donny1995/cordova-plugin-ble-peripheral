@@ -2,7 +2,7 @@
 
 A Cordova plugin for implementing BLE (Bluetooth Low Energy) peripherals.
 
-Need a BLE central module? See [cordova-plugin-ble-central](https://github.com/don/cordova-plugin-ble-central).
+Need a BLE central module? See [cordova-plugin-ble-central](https://github.com/simplifier-ag/cordova-plugin-ble-peripheral).
 
 ## Supported Platforms
 
@@ -77,17 +77,17 @@ Instead of using JSON, you can create services programtically. Note that for 1.0
 
 ### Examples
 
-See the [examples](https://github.com/don/cordova-plugin-ble-peripheral/tree/master/examples) for more ideas on how this plugin can be used.
+See the [examples](https://github.com/simplifier-ag/cordova-plugin-ble-peripheral/tree/master/examples) for more ideas on how this plugin can be used.
 
 # Installing
 
 ### Cordova
 
-    $ cordova plugin add cordova-plugin-ble-peripheral
+    $ cordova plugin add https://github.com/simplifier-ag/cordova-plugin-ble-peripheral.git
 
 ### PhoneGap
 
-    $ phonegap plugin add cordova-plugin-ble-peripheral
+    $ phonegap plugin add https://github.com/simplifier-ag/cordova-plugin-ble-peripheral.git
 
 ### PhoneGap Build
 
