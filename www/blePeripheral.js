@@ -214,7 +214,7 @@ module.exports = {
     setCharacteristicValue: function (service, characteristic, value) {
 
         return new Promise(function (resolve, reject) {
-            buffer = ArrayBuffer.isView(value) ? value.buffer : value;
+            var buffer = ArrayBuffer.isView(value) ? value.buffer : value;
 
             if (buffer.constructor.name !== 'ArrayBuffer') {
                 reject('value must be an ArrayBuffer');
