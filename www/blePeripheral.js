@@ -156,14 +156,6 @@ module.exports = {
 
     },
 
-    addService: function (service) {
-
-        return new Promise(function (resolve, reject) {
-            cordova.exec(resolve, reject, 'BLEPeripheral', 'addService', [service]);
-        });
-
-    },
-
     publishService: function (uuid) {
 
         return new Promise(function (resolve, reject) {

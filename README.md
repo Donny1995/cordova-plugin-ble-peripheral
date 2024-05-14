@@ -11,6 +11,8 @@ Need a BLE central module? See [cordova-plugin-ble-central](https://github.com/s
 
 ## Usage
 
+If at any point a bluetooth or location permission is required, the API will try to ask the user for it before any success or error callbacks are called.
+
 ### Callbacks
 
 Register callbacks to receive notifications from the plugin
@@ -74,6 +76,58 @@ Instead of using JSON, you can create services programtically. Note that for 1.0
         function() { console.log ('Created UART Service'); },
         app.onError
     );
+
+## API
+
+### blePeripheral.createService(uuid)
+Create a service with given uuid.
+
+### blePeripheral.createServiceFromJSON(json)
+Create a service from json.
+
+### blePeripheral.addCharacteristic(service, characteristic, properties, permissions)
+Add a characteristic to a service with blePeripheral.properties and required blePeripheral.permissions.
+
+### blePeripheral.publishService(seriveUUID)
+Publish a service with given UUID.
+
+### blePeripheral.removeService(seriveUUID)
+Remove and unpublish a service with given UUID.
+
+### blePeripheral.removeAllServices()
+Remove and unpublish all previously added services.
+
+### blePeripheral.startAdvertising(name, seriveUUID)
+Offer your service::UUID under a given name::String.
+
+### blePeripheral.stopAdvertising()
+Stop offering the service.
+
+### blePeripheral.setCharacteristicValue(seriveUUID, characteristicUUID, value)
+Update a characteristic::UUID value::TypedArray in a given service::UUID.
+
+### blePeripheral.onWriteRequest(callback)
+Add callback:Function to get write notifications.
+
+### blePeripheral.onBluetoothStateChange(callback)
+Add callback:Function to get bluetooth state changes.
+
+### blePeripheral.properties
+Used when defining a GATT characteristic.
+
+    READ, //read a value
+    WRITE, //write a value WITH response
+    WRITE_NO_RESPONSE, //write a value, but skip reponse
+    NOTIFY, //central characteristic value change with acknowledge
+    INDICATE //value change without ACK
+
+### blePeripheral.permissions
+Used when defining a GATT characteristic.
+
+    READABLE //set readable only
+    WRITEABLE //set writable
+    READ_ENCRYPTION_REQUIRED //read requires encryption
+    WRITE_ENCRYPTION_REQUIRED //write requires encryption
 
 ### Examples
 
