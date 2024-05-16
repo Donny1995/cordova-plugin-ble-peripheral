@@ -157,12 +157,21 @@ static NSDictionary *dataToArrayBuffer(NSData* data) {
     if (service) {
         [manager removeService:service];
         [services removeObjectForKey:serviceUUIDString];
+        
+        CDVPluginResult *pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK];
+        [self.commandDelegate sendPluginResult:pluginResult callbackId:command.callbackId];
     }
+    NSString *message = [NSString stringWithFormat:@"Service not found for UUID %@", serviceUUIDString];
+    CDVPluginResult *pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR messageAsString:message];
+    [self.commandDelegate sendPluginResult:pluginResult callbackId:command.callbackId];
 }
 
 - (void)removeAllServices:(CDVInvokedUrlCommand *)command{
     [manager removeAllServices];
     [services removeAllObjects];
+    
+    CDVPluginResult *pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK];
+    [self.commandDelegate sendPluginResult:pluginResult callbackId:command.callbackId];
 }
 
 - (void)startAdvertising:(CDVInvokedUrlCommand *)command {
@@ -182,6 +191,9 @@ static NSDictionary *dataToArrayBuffer(NSData* data) {
 
 - (void)stopAdvertising:(CDVInvokedUrlCommand *)command {
         [manager stopAdvertising];
+        CDVPluginResult *pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK];
+        [self.commandDelegate sendPluginResult:pluginResult callbackId:command.callbackId];
+        
 }
 
 - (void)setCharacteristicValueChangedListener:(CDVInvokedUrlCommand *)command {
@@ -276,7 +288,7 @@ static NSDictionary *dataToArrayBuffer(NSData* data) {
 
         startAdvertisingCallbackId = nil;
     }
-
+    
 }
 
 - (void)peripheralManager:(CBPeripheralManager *)peripheral central:(CBCentral *)central didSubscribeToCharacteristic:(CBCharacteristic *)characteristic
