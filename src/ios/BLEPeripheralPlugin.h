@@ -25,6 +25,7 @@
 @interface BLEPeripheralPlugin : CDVPlugin <CBPeripheralManagerDelegate> {
     NSString* bluetoothStateChangedCallback;
     NSString* characteristicValueChangedCallback;
+    NSString* charactristicReadValueCallback;
     NSString* descriptorValueChangedCallback;
     NSMutableDictionary* services;
     NSString* publishServiceCallbackId; // TODO need to handle multiple

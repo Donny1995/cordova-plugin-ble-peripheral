@@ -26,6 +26,46 @@ static NSDictionary *dataToArrayBuffer(NSData* data) {
              };
 }
 
+@interface BLECharacteristicReadRequest : NSObject
+@property (nonatomic, nonnull) NSUUID *contextID;
+@property (nonatomic, nullable, weak) BLEPeripheralPlugin *plugin;
+@property (nonatomic, nonnull) CBATTRequest *request;
+@property (nonatomic, nonnull) NSTimer *timeout;
+
+- (id)initWithPlugin:(BLEPeripheralPlugin *)plugin request:(CBATTRequest *)request;
+- (void)dealloc;
+
+@end
+
+@implementation BLECharacteristicReadRequest
+
+@synthesize contextID;
+@synthesize timeout;
+@synthesize plugin;
+@synthesize request;
+
+- (id)initWithPlugin:(BLEPeripheralPlugin *)plugin request:(CBATTRequest *)request {
+    if (self = [super init]) {
+        
+        NSUUID *contextID = [NSUUID UUID];
+        self.contextID = contextID;
+        self.request = request;
+        self.timeout = [NSTimer scheduledTimerWithTimeInterval:3.0 repeats:NO block:^(NSTimer * _Nonnull timer) {
+            [plugin performSelector:@selector(requestedCharacteristicValueTimeout:) withObject:contextID];
+        }];
+        
+        return self;
+    } else {
+        return nil;
+    }
+}
+
+- (void)dealloc {
+    [timeout invalidate];
+}
+
+@end
+
 @interface BLEPeripheralPlugin() {
     NSDictionary *bluetoothStates;
 }
@@ -34,6 +74,8 @@ static NSDictionary *dataToArrayBuffer(NSData* data) {
 @implementation BLEPeripheralPlugin
 
 @synthesize manager;
+
+NSMutableDictionary<NSUUID *, BLECharacteristicReadRequest *> *readingCallbacks;
 
 - (void)pluginInitialize {
 
@@ -44,7 +86,7 @@ static NSDictionary *dataToArrayBuffer(NSData* data) {
 
     manager = [[CBPeripheralManager alloc] initWithDelegate:self queue:nil];
     services = [NSMutableDictionary new];
-
+    readingCallbacks = [NSMutableDictionary new];
     bluetoothStates = [NSDictionary dictionaryWithObjectsAndKeys:
                        @"unknown", @(CBPeripheralManagerStateUnknown),
                        @"resetting", @(CBPeripheralManagerStateResetting),
@@ -200,6 +242,78 @@ static NSDictionary *dataToArrayBuffer(NSData* data) {
     characteristicValueChangedCallback = [command.callbackId copy];
 }
 
+-(void)setCharacteristicValueRequestedListener:(CDVInvokedUrlCommand *)command {
+    charactristicReadValueCallback = [command.callbackId copy];
+}
+
+
+/// js did calculate characteristic value;
+/// - Parameter command: 0 - contextID, 1 - result;
+-(void)recieveRequestedCharacteristicValue:(CDVInvokedUrlCommand *)command {
+    NSString *someUniqueIDString = [command.arguments objectAtIndex:0];
+    NSData *result = [command.arguments objectAtIndex:1];
+    NSLog(@"recieveRequestedCharacteristicValue: %@", result);
+    
+    if (!someUniqueIDString || !result) {
+        CDVPluginResult *pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR];
+        [self.commandDelegate sendPluginResult:pluginResult callbackId:command.callbackId];
+        return;
+    }
+    
+    NSUUID *contextID = [[NSUUID alloc] initWithUUIDString:someUniqueIDString];
+    BLECharacteristicReadRequest *requestContext = [readingCallbacks objectForKey:contextID];
+    if (!requestContext) {
+        CDVPluginResult *pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR];
+        [self.commandDelegate sendPluginResult:pluginResult callbackId:command.callbackId];
+        return;
+    }
+    
+    [readingCallbacks removeObjectForKey:contextID];
+    [requestContext.timeout invalidate];
+    
+    CBUUID *cbuuid = requestContext.request.characteristic.UUID;
+    CBService *service = requestContext.request.characteristic.service;
+    if (!service) {
+        CDVPluginResult *pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR];
+        [self.commandDelegate sendPluginResult:pluginResult callbackId:command.callbackId];
+        return;
+    }
+    
+    CBATTRequest *request = requestContext.request;
+    CBCharacteristic *characteristic = [self findCharacteristicByUUID:cbuuid service:service];
+    if (!characteristic) {
+        characteristic = request.characteristic;
+    }
+    
+    request.value = [result subdataWithRange:NSMakeRange(request.offset, result.length - request.offset)];
+    [manager respondToRequest:request
+                   withResult:CBATTErrorSuccess];
+    
+    CDVPluginResult *pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK];
+    [self.commandDelegate sendPluginResult:pluginResult callbackId:command.callbackId];
+}
+
+-(void)requestedCharacteristicValueTimeout:(NSUUID *)context {
+    
+    BLECharacteristicReadRequest *requestContext = [readingCallbacks objectForKey:context];
+    if (!context) {
+        return;
+    }
+    
+    [readingCallbacks removeObjectForKey:context];
+    [requestContext.timeout invalidate];
+    
+    CBCharacteristic * characteristic = requestContext.request.characteristic;
+    CBService * service = characteristic.service;
+    if (!service) {
+        return;
+    }
+    
+    [self sendCharacteristicReadFallbackResultWithCharacteristic:characteristic
+                                                         service:service
+                                                         request:requestContext.request];
+}
+
 - (void)setDescriptorValueChangedListener:(CDVInvokedUrlCommand *)command {
     descriptorValueChangedCallback  = [command.callbackId copy];
 }
@@ -323,19 +437,43 @@ static NSDictionary *dataToArrayBuffer(NSData* data) {
 -(void)peripheralManager:(CBPeripheralManager *)peripheral didReceiveReadRequest:(CBATTRequest *)request {
     NSLog(@"Received read request for %@", [request characteristic]);
 
-    // FUTURE if there is a callback, call into JavaScript for a value
-    // otherwise, grab the current value of the characteristic and send it back
-
     CBCharacteristic *requestedCharacteristic = request.characteristic;
     CBService *requestedService = [requestedCharacteristic service];
+    if (!requestedService) {
+        return;
+    }
+    
+    if (charactristicReadValueCallback) {
+        
+        BLECharacteristicReadRequest *context = [[BLECharacteristicReadRequest alloc] initWithPlugin:self request:request];
+        [readingCallbacks setObject:context forKey:context.contextID];
+        
+        NSMutableDictionary *dict = [NSMutableDictionary new];
+        [dict setObject:context.contextID.UUIDString forKey:@"contextID"];
+        [dict setObject:requestedCharacteristic.UUID.UUIDString forKey:@"characteristic"];
+        [dict setObject:requestedService.UUID.UUIDString forKey:@"service"];
+        
+        CDVPluginResult *result = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK messageAsDictionary:dict];
+        [result setKeepCallbackAsBool:YES];
+        [self.commandDelegate sendPluginResult:result callbackId:charactristicReadValueCallback];
+        
+    } else {
+        [self sendCharacteristicReadFallbackResultWithCharacteristic:requestedCharacteristic
+                                                             service:requestedService
+                                                             request:request];
+    }
+}
 
-    CBCharacteristic *characteristic  = [self findCharacteristicByUUID: [requestedCharacteristic UUID] service:requestedService];
-
-    request.value = [characteristic.value
-                     subdataWithRange:NSMakeRange(request.offset,
-                                                  characteristic.value.length - request.offset)];
-
-    [peripheral respondToRequest:request withResult:CBATTErrorSuccess];
+-(void)sendCharacteristicReadFallbackResultWithCharacteristic:(CBCharacteristic *)characteristic service:(CBService *)service request:(CBATTRequest *)request {
+    
+    CBCharacteristic *requestedCharacteristic = [self findCharacteristicByUUID:characteristic.UUID
+                                                                       service:service];
+    if (!requestedCharacteristic) {
+        requestedCharacteristic = characteristic;
+    }
+    
+    request.value = [characteristic.value subdataWithRange:NSMakeRange(request.offset, characteristic.value.length - request.offset)];
+    [manager respondToRequest:request withResult:CBATTErrorSuccess];
 }
 
 

@@ -52,6 +52,7 @@ function convertToNativeJS(object) {
 // end Util functions
 
 var onWriteRequestCallback;
+var onReadRequestCallback;
 var onBluetoothStateChangeCallback;
 
 function registerWriteRequestCallback() {
@@ -75,6 +76,44 @@ function registerWriteRequestCallback() {
 }
 registerWriteRequestCallback();
 
+function registerReadRequestCallback() {
+
+    var didReceiveReadRequest = function(dictionaryObject) {
+        console.log('didReceiveReadRequest', dictionaryObject);
+        
+        const contextID = dictionaryObject.contextID;
+        const characteristic = dictionaryObject.characteristic;
+        const service = dictionaryObject.service;
+        
+        if (!(contextID && characteristic && service)) {
+            console.log('didReceiveReadRequest', 'malformed reqeust');
+            return
+        }
+        
+        if (onReadRequestCallback && typeof onReadRequestCallback === 'function') {
+            let result = onReadRequestCallback(service, characteristic);
+            
+            if(result) {
+                if (typeof result === 'ArrayBuffer') {
+                    cordova.exec(() => { }, () => { }, 'BLEPeripheral', 'recieveRequestedCharacteristicValue', [contextID, result]);
+                    
+                } else if (typeof result === 'string') {
+                    result = stringToArrayBuffer(result);
+                    cordova.exec(() => { }, () => { }, 'BLEPeripheral', 'recieveRequestedCharacteristicValue', [contextID, result]);
+                }
+
+            }
+        }
+    };
+    
+    var failure = function () {
+        // this should never happen
+        console.log("Failed to add setCharacteristicValueRequestedListener");
+    };
+    
+    cordova.exec(didReceiveReadRequest, failure, 'BLEPeripheral', 'setCharacteristicValueRequestedListener');
+}
+
 function registerBluetoothStateChangeCallback() {
 
     var bluetoothStateChanged = function (state) {
@@ -94,15 +133,15 @@ function registerBluetoothStateChangeCallback() {
 }
 registerBluetoothStateChangeCallback();
 
-/* 
+/*
 Characteristic premissions are not consistent across platforms. This will need to be reconciled.
 Maybe permissions should be optional and default to read/write based on the properties.
 
 // iOS permissions CBCharacteristic.h
-    CBAttributePermissionsReadable					= 0x01,
-    CBAttributePermissionsWriteable					= 0x02,
-    CBAttributePermissionsReadEncryptionRequired	= 0x04,
-    CBAttributePermissionsWriteEncryptionRequired	= 0x08
+    CBAttributePermissionsReadable                    = 0x01,
+    CBAttributePermissionsWriteable                    = 0x02,
+    CBAttributePermissionsReadEncryptionRequired    = 0x04,
+    CBAttributePermissionsWriteEncryptionRequired    = 0x08
 
 // Android permissions BluetoothGattCharacteristic.java
 
@@ -217,14 +256,14 @@ module.exports = {
     },
 
     // setDescriptorValue: function(service, characteristic, descriptor, value) {
-    // 
+    //
     //     return new Promise(function(resolve, reject) {
     //         if (value.constructor !== ArrayBuffer) {
     //             reject('value must be an ArrayBuffer');
     //         }
     //         cordova.exec(resolve, reject, 'BLEPeripheral', 'setDescriptorValue', [service, characteristic, descriptor, value]);
     //     });
-    // 
+    //
     // },
 
     // setDescriptorValueChangedListener: function(success) {
@@ -246,6 +285,11 @@ module.exports = {
     // }
     onWriteRequest: function (callback) {
         onWriteRequestCallback = callback;
+    },
+    
+    onReadRequest: function (callback) {
+        onReadRequestCallback = callback;
+        registerReadRequestCallback();
     },
 
     onBluetoothStateChange: function (callback) {
